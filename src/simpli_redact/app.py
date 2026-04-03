@@ -4,12 +4,23 @@ from __future__ import annotations
 
 import uuid
 
+import json as json_module
+from typing import Any
+
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, File, Form, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from simpli_redact import __version__
 from simpli_core import CostTracker, create_app
+from simpli_core.connectors import (
+    FieldMapping,
+    FileConnector,
+    SalesforceConnector,
+    apply_mappings,
+)
+from simpli_core.connectors.mapping import CASE_TO_TICKET
 from simpli_redact.settings import settings
 
 cost_tracker = CostTracker()
@@ -201,6 +212,110 @@ async def validate_text(request: ValidateRequest) -> ValidateResponse:
         safe=True,
         entities=[],
         recommendation="No PII detected.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Ingest models
+# ---------------------------------------------------------------------------
+
+
+class SalesforceIngestRequest(BaseModel):
+    instance_url: str = ""
+    client_id: str = ""
+    client_secret: str = ""
+    soql_where: str = ""
+    limit: int = Field(default=100, ge=1, le=10000)
+    mappings: list[FieldMapping] | None = None
+
+
+class IngestResult(BaseModel):
+    total: int
+    processed: int
+    results: list[dict[str, Any]]
+    errors: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Ingest routes
+# ---------------------------------------------------------------------------
+
+
+@v1.post("/ingest", response_model=IngestResult, tags=["ingest"])
+async def ingest_file(
+    file: UploadFile = File(...),
+    mappings: str | None = Form(default=None),
+) -> IngestResult:
+    """Ingest texts from a file and detect PII in each one."""
+    records = FileConnector.parse(file.file, format=_detect_format(file.filename))
+
+    field_mappings: list[FieldMapping] | None = None
+    if mappings:
+        field_mappings = [FieldMapping(**m) for m in json_module.loads(mappings)]
+
+    return await _process_records(records, field_mappings, apply_defaults=False)
+
+
+@v1.post("/ingest/salesforce", response_model=IngestResult, tags=["ingest"])
+async def ingest_salesforce(request: SalesforceIngestRequest) -> IngestResult:
+    """Pull cases from Salesforce and detect PII in each one."""
+    instance_url = request.instance_url or settings.salesforce_instance_url
+    client_id = request.client_id or settings.salesforce_client_id
+    client_secret = request.client_secret or settings.salesforce_client_secret
+
+    if not all([instance_url, client_id, client_secret]):
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=400,
+            content={"detail": "Salesforce credentials required (instance_url, client_id, client_secret)"},
+        )
+
+    connector = SalesforceConnector(
+        instance_url=instance_url,
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+    records = connector.get_cases(where=request.soql_where, limit=request.limit)
+
+    return await _process_records(records, request.mappings)
+
+
+def _detect_format(filename: str | None) -> str:
+    if not filename:
+        return "csv"
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else "csv"
+    return suffix if suffix in FileConnector.SUPPORTED_FORMATS else "csv"
+
+
+async def _process_records(
+    records: list[dict[str, Any]],
+    custom_mappings: list[FieldMapping] | None,
+    *,
+    apply_defaults: bool = True,
+) -> IngestResult:
+    if custom_mappings:
+        mapped = apply_mappings(records, custom_mappings)
+    elif apply_defaults:
+        mapped = apply_mappings(records, CASE_TO_TICKET)
+    else:
+        mapped = records
+
+    results: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    for i, record in enumerate(mapped):
+        try:
+            text = record.get("text", record.get("description", record.get("body", "")))
+            req = DetectRequest(texts=[TextInput(text=text)])
+            result = await detect_pii(req)
+            results.append(result.model_dump())
+        except Exception as exc:
+            errors.append({"index": i, "error": str(exc), "record": record})
+
+    return IngestResult(
+        total=len(records),
+        processed=len(results),
+        results=results,
+        errors=errors,
     )
 
 
