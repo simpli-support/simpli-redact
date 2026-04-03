@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import uuid
-
 import json as json_module
+import uuid
 from typing import Any
 
 import structlog
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-
-from simpli_redact import __version__
 from simpli_core import CostTracker, create_app
 from simpli_core.connectors import (
     FieldMapping,
@@ -21,6 +18,8 @@ from simpli_core.connectors import (
     apply_mappings,
 )
 from simpli_core.connectors.mapping import CASE_TO_TICKET
+
+from simpli_redact import __version__
 from simpli_redact.settings import settings
 
 cost_tracker = CostTracker()
@@ -243,7 +242,7 @@ class IngestResult(BaseModel):
 
 @v1.post("/ingest", response_model=IngestResult, tags=["ingest"])
 async def ingest_file(
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     mappings: str | None = Form(default=None),
 ) -> IngestResult:
     """Ingest texts from a file and detect PII in each one."""
@@ -266,7 +265,10 @@ async def ingest_salesforce(request: SalesforceIngestRequest) -> IngestResult:
     if not all([instance_url, client_id, client_secret]):
         return JSONResponse(  # type: ignore[return-value]
             status_code=400,
-            content={"detail": "Salesforce credentials required (instance_url, client_id, client_secret)"},
+            content={
+                "detail": "Salesforce credentials required"
+                " (instance_url, client_id, client_secret)"
+            },
         )
 
     connector = SalesforceConnector(
