@@ -44,22 +44,31 @@ app = create_app(
 
 class TextInput(BaseModel):
     text: str = Field(min_length=1, description="Text content to analyze for PII")
-    context: str | None = Field(default=None, description="Optional context hint such as 'support_ticket' or 'kb_article'")
+    context: str | None = Field(
+        default=None,
+        description="Optional context hint such as 'support_ticket' or 'kb_article'",
+    )
 
 
 class PiiEntity(BaseModel):
-    type: str = Field(description="PII category (e.g. credit_card, ssn, email, phone, address, name)")
+    type: str = Field(
+        description="PII category (e.g. credit_card, ssn, email, phone, address, name)"
+    )
     value: str = Field(description="The detected PII text")
     start: int = Field(description="Start character offset in the original text")
     end: int = Field(description="End character offset in the original text")
-    confidence: float = Field(ge=0.0, le=1.0, description="Model confidence for this detection")
+    confidence: float = Field(
+        ge=0.0, le=1.0, description="Model confidence for this detection"
+    )
 
 
 # POST /api/v1/detect — detect PII in text
 
 
 class DetectRequest(BaseModel):
-    texts: list[TextInput] = Field(min_length=1, description="Texts to scan for PII entities")
+    texts: list[TextInput] = Field(
+        min_length=1, description="Texts to scan for PII entities"
+    )
 
 
 class DetectResult(BaseModel):
@@ -72,7 +81,9 @@ class DetectResponse(BaseModel):
     scan_id: str = Field(description="Unique identifier for this detection run")
     total_texts: int = Field(description="Number of texts that were scanned")
     results: list[DetectResult] = Field(description="Per-text detection results")
-    total_pii_found: int = Field(description="Total PII entities found across all texts")
+    total_pii_found: int = Field(
+        description="Total PII entities found across all texts"
+    )
 
 
 # POST /api/v1/redact — redact PII from text
@@ -80,7 +91,10 @@ class DetectResponse(BaseModel):
 
 class RedactRequest(BaseModel):
     texts: list[TextInput] = Field(min_length=1, description="Texts to redact PII from")
-    replacement: str | None = Field(default=None, description="Custom replacement string to use instead of default placeholders")
+    replacement: str | None = Field(
+        default=None,
+        description="Custom replacement string to use instead of default placeholders",
+    )
 
 
 class RedactResult(BaseModel):
@@ -95,27 +109,39 @@ class RedactResponse(BaseModel):
     scan_id: str = Field(description="Unique identifier for this redaction run")
     total_texts: int = Field(description="Number of texts that were processed")
     results: list[RedactResult] = Field(description="Per-text redaction results")
-    total_redactions: int = Field(description="Total redactions applied across all texts")
+    total_redactions: int = Field(
+        description="Total redactions applied across all texts"
+    )
 
 
 # POST /api/v1/scan — scan a batch for PII risk summary (no redaction)
 
 
 class ScanRequest(BaseModel):
-    texts: list[TextInput] = Field(min_length=1, description="Texts to scan for PII risk assessment")
+    texts: list[TextInput] = Field(
+        min_length=1, description="Texts to scan for PII risk assessment"
+    )
 
 
 class PiiRiskSummary(BaseModel):
     total_texts: int = Field(description="Number of texts that were scanned")
     texts_with_pii: int = Field(description="Number of texts containing PII")
-    pii_rate: float = Field(ge=0.0, le=1.0, description="Fraction of texts containing PII")
-    by_type: dict[str, int] = Field(description="Count of PII occurrences grouped by type")
-    high_risk_indices: list[int] = Field(description="Indices of texts with high-risk PII such as SSN or credit card")
+    pii_rate: float = Field(
+        ge=0.0, le=1.0, description="Fraction of texts containing PII"
+    )
+    by_type: dict[str, int] = Field(
+        description="Count of PII occurrences grouped by type"
+    )
+    high_risk_indices: list[int] = Field(
+        description="Indices of texts with high-risk PII such as SSN or credit card"
+    )
 
 
 class ScanResponse(BaseModel):
     scan_id: str = Field(description="Unique identifier for this scan run")
-    summary: PiiRiskSummary = Field(description="Aggregated PII risk summary across all texts")
+    summary: PiiRiskSummary = Field(
+        description="Aggregated PII risk summary across all texts"
+    )
 
 
 # POST /api/v1/validate — check if text is safe (no PII)
@@ -128,7 +154,9 @@ class ValidateRequest(BaseModel):
 class ValidateResponse(BaseModel):
     safe: bool = Field(description="Whether the text is free of PII")
     entities: list[PiiEntity] = Field(description="PII entities found, if any")
-    recommendation: str = Field(description="Human-readable recommendation based on the scan")
+    recommendation: str = Field(
+        description="Human-readable recommendation based on the scan"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +206,12 @@ def _parse_llm_json(raw: str) -> dict:
     return json_module.loads(text)
 
 
-@v1.post("/detect", response_model=DetectResponse, tags=["detect"], summary="Detect PII in texts")
+@v1.post(
+    "/detect",
+    response_model=DetectResponse,
+    tags=["detect"],
+    summary="Detect PII in texts",
+)
 async def detect_pii(request: DetectRequest) -> DetectResponse:
     """Detect PII entities in the provided texts."""
     scan_id = str(uuid.uuid4())
@@ -233,7 +266,12 @@ async def detect_pii(request: DetectRequest) -> DetectResponse:
     )
 
 
-@v1.post("/redact", response_model=RedactResponse, tags=["redact"], summary="Redact PII from texts")
+@v1.post(
+    "/redact",
+    response_model=RedactResponse,
+    tags=["redact"],
+    summary="Redact PII from texts",
+)
 async def redact_pii(request: RedactRequest) -> RedactResponse:
     """Redact PII from the provided texts."""
     scan_id = str(uuid.uuid4())
@@ -283,7 +321,12 @@ async def redact_pii(request: RedactRequest) -> RedactResponse:
     )
 
 
-@v1.post("/scan", response_model=ScanResponse, tags=["scan"], summary="Scan texts for PII risk summary")
+@v1.post(
+    "/scan",
+    response_model=ScanResponse,
+    tags=["scan"],
+    summary="Scan texts for PII risk summary",
+)
 async def scan_pii(request: ScanRequest) -> ScanResponse:
     """Scan a batch of texts for a PII risk summary (no redaction)."""
     scan_id = str(uuid.uuid4())
@@ -321,18 +364,21 @@ async def scan_pii(request: ScanRequest) -> ScanResponse:
     risk_level = parsed.get("risk_level", "none")
 
     # Map risk level to high-risk detection
-    high_risk_types = {"ssn", "credit_card", "social_security"}
     high_risk_indices: list[int] = []
     if risk_level in ("high", "critical"):
         high_risk_indices = list(range(len(request.texts)))
 
-    texts_with_pii = total_pii_count if total_pii_count <= len(request.texts) else len(request.texts)
+    texts_with_pii = (
+        total_pii_count if total_pii_count <= len(request.texts) else len(request.texts)
+    )
     by_type: dict[str, int] = {t: 1 for t in types_found}
 
     summary = PiiRiskSummary(
         total_texts=len(request.texts),
         texts_with_pii=texts_with_pii,
-        pii_rate=round(texts_with_pii / len(request.texts), 4) if request.texts else 0.0,
+        pii_rate=round(texts_with_pii / len(request.texts), 4)
+        if request.texts
+        else 0.0,
         by_type=by_type,
         high_risk_indices=high_risk_indices,
     )
@@ -340,7 +386,12 @@ async def scan_pii(request: ScanRequest) -> ScanResponse:
     return ScanResponse(scan_id=scan_id, summary=summary)
 
 
-@v1.post("/validate", response_model=ValidateResponse, tags=["validate"], summary="Validate text is PII-free")
+@v1.post(
+    "/validate",
+    response_model=ValidateResponse,
+    tags=["validate"],
+    summary="Validate text is PII-free",
+)
 async def validate_text(request: ValidateRequest) -> ValidateResponse:
     """Check if the provided text is safe (contains no PII)."""
     system_prompt = (
@@ -373,11 +424,19 @@ async def validate_text(request: ValidateRequest) -> ValidateResponse:
     # If not safe, run detect to get detailed entities
     entities: list[PiiEntity] = []
     if not is_safe:
-        detect_resp = await detect_pii(DetectRequest(texts=[TextInput(text=request.text)]))
+        detect_resp = await detect_pii(
+            DetectRequest(texts=[TextInput(text=request.text)])
+        )
         if detect_resp.results:
             entities = detect_resp.results[0].entities
 
-    recommendation = "No PII detected." if is_safe else "; ".join(issues) if issues else "PII detected — review before sending."
+    recommendation = (
+        "No PII detected."
+        if is_safe
+        else "; ".join(issues)
+        if issues
+        else "PII detected — review before sending."
+    )
 
     logger.info("pii_validate", text_length=len(request.text), safe=is_safe)
     return ValidateResponse(
@@ -393,19 +452,32 @@ async def validate_text(request: ValidateRequest) -> ValidateResponse:
 
 
 class SalesforceIngestRequest(BaseModel):
-    instance_url: str = Field(default="", description="Salesforce instance URL (uses server default if empty)")
-    client_id: str = Field(default="", description="OAuth2 client ID (uses server default if empty)")
-    client_secret: str = Field(default="", description="OAuth2 client secret (uses server default if empty)")
-    soql_where: str = Field(default="", description="Optional WHERE clause filter for SOQL query")
+    instance_url: str = Field(
+        default="", description="Salesforce instance URL (uses server default if empty)"
+    )
+    client_id: str = Field(
+        default="", description="OAuth2 client ID (uses server default if empty)"
+    )
+    client_secret: str = Field(
+        default="", description="OAuth2 client secret (uses server default if empty)"
+    )
+    soql_where: str = Field(
+        default="", description="Optional WHERE clause filter for SOQL query"
+    )
     limit: int = Field(default=100, ge=1, le=10000, description="Max records to fetch")
-    mappings: list[FieldMapping] | None = Field(default=None, description="Custom field mappings (uses defaults if not provided)")
+    mappings: list[FieldMapping] | None = Field(
+        default=None,
+        description="Custom field mappings (uses defaults if not provided)",
+    )
 
 
 class IngestResult(BaseModel):
     total: int = Field(description="Total records received")
     processed: int = Field(description="Records successfully processed")
     results: list[dict[str, Any]] = Field(description="Processing results")
-    errors: list[dict[str, Any]] = Field(default_factory=list, description="Records that failed processing")
+    errors: list[dict[str, Any]] = Field(
+        default_factory=list, description="Records that failed processing"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -413,7 +485,12 @@ class IngestResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-@v1.post("/ingest", response_model=IngestResult, tags=["ingest"], summary="Ingest texts from file")
+@v1.post(
+    "/ingest",
+    response_model=IngestResult,
+    tags=["ingest"],
+    summary="Ingest texts from file",
+)
 async def ingest_file(
     file: UploadFile = File(...),  # noqa: B008
     mappings: str | None = Form(default=None),
@@ -428,7 +505,12 @@ async def ingest_file(
     return await _process_records(records, field_mappings, apply_defaults=False)
 
 
-@v1.post("/ingest/salesforce", response_model=IngestResult, tags=["ingest"], summary="Ingest from Salesforce")
+@v1.post(
+    "/ingest/salesforce",
+    response_model=IngestResult,
+    tags=["ingest"],
+    summary="Ingest from Salesforce",
+)
 async def ingest_salesforce(request: SalesforceIngestRequest) -> IngestResult:
     """Pull cases from Salesforce and detect PII in each one."""
     instance_url = request.instance_url or settings.salesforce_instance_url
@@ -467,10 +549,11 @@ async def _process_records(
     *,
     apply_defaults: bool = True,
 ) -> IngestResult:
+    keep = settings.preserve_unmapped_fields
     if custom_mappings:
-        mapped = apply_mappings(records, custom_mappings, preserve_unmapped=settings.preserve_unmapped_fields)
+        mapped = apply_mappings(records, custom_mappings, preserve_unmapped=keep)
     elif apply_defaults:
-        mapped = apply_mappings(records, CASE_TO_TICKET, preserve_unmapped=settings.preserve_unmapped_fields)
+        mapped = apply_mappings(records, CASE_TO_TICKET, preserve_unmapped=keep)
     else:
         mapped = records
 
